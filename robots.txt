@@ -1,0 +1,5 @@
+# Noorala — www.nooralacare.com
+User-agent: *
+Allow: /
+
+Sitemap: https://www.nooralacare.com/sitemap.xml
