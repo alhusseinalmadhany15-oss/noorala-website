@@ -72,7 +72,19 @@ TTL. Until then the old site — or a registrar parking page — may still appea
 
 ---
 
-## 3 · Deploying a change
+## 3 · Why `.nojekyll` is there
+
+GitHub Pages runs every site through Jekyll by default. This one needs no
+build step, and Jekyll's template language treats `{{ … }}` and `{% … %}` as
+its own — so the first time one of those appears in the source, Jekyll eats it
+silently and serves mangled output with no error anywhere.
+
+The most likely place for that to happen is Noor's knowledge base in
+`assets/js/chat.js`, where an answer could easily contain braces. The empty
+`.nojekyll` file at the repository root switches Jekyll off entirely, which
+also makes deploys faster. Leave it in place.
+
+## 4 · Deploying a change
 
 ```sh
 git checkout main
@@ -90,7 +102,7 @@ them locally.
 
 ---
 
-## 4 · What to set before, or soon after, launch
+## 5 · What to set before, or soon after, launch
 
 ### Prices — live now, unverified
 `CFG.packs` at the top of `assets/js/noorala.js` currently holds:
@@ -142,7 +154,7 @@ is a packaging problem, and six places on the site change back together
 
 ---
 
-## 5 · Rolling back
+## 6 · Rolling back
 
 Every deploy is a commit, so a bad one reverts in seconds:
 
