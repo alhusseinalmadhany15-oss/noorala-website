@@ -635,16 +635,24 @@
       <div class="tl"><span class="dot"></span><b>Day 90</b><span>Journey complete</span></div>
     </div>
 
-    <div class="dash mt-l">
+    <!-- Shared gradient for both consistency rings. It has to live outside
+         either dashboard: whichever one is hidden is display:none, and a
+         gradient inside a display:none subtree will not paint. -->
+    <svg width="0" height="0" aria-hidden="true" focusable="false" style="position:absolute">
+      <defs><linearGradient id="rg" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0%" stop-color="#C8446B"/><stop offset="100%" stop-color="#C9A46A"/>
+      </linearGradient></defs>
+    </svg>
+
+    <!-- Not started yet: what the journey is, and the button that begins it. -->
+    <div class="dash mt-l" id="jrPreview">
       <div class="ring-card rv">
-        <span class="eyebrow on-dark" style="margin:0">My Collagen · Dashboard</span>
-        <svg class="ring" viewBox="0 0 120 120" role="img" aria-label="Consistency ring">
-          <defs><linearGradient id="rg" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0%" stop-color="#C8446B"/><stop offset="100%" stop-color="#C9A46A"/></linearGradient></defs>
+        <span class="eyebrow on-dark" style="margin:0">My Collagen · Preview</span>
+        <svg class="ring" viewBox="0 0 120 120" role="img" aria-label="Consistency ring preview">
           <circle class="bgc" cx="60" cy="60" r="50"/>
-          <circle class="fgc" id="ringFg" cx="60" cy="60" r="50" transform="rotate(-90 60 60)" stroke-dasharray="314" stroke-dashoffset="314"/>
+          <circle class="fgc" id="ringFgPrev" cx="60" cy="60" r="50" transform="rotate(-90 60 60)" stroke-dasharray="314" stroke-dashoffset="314"/>
         </svg>
-        <div class="ring-label" id="ringVal">0%</div>
+        <div class="ring-label" id="ringValPrev">0%</div>
         <p class="small" style="margin:0">Consistency</p>
         <div style="margin-top:24px;text-align:left">
           <label class="lb" for="daySlide">Preview day <span id="dayNum">24</span> / 90</label>
@@ -653,16 +661,72 @@
       </div>
 
       <div class="rv" data-d="1">
-        <div class="dash-list">
-          <div class="dash-item"><button class="chk" aria-pressed="false" aria-label="Mark daily serving complete">✓</button><div><b>Today's ritual</b><span id="dashRitual">1 sachet · Morning · Strawberry</span></div></div>
-          <div class="dash-item"><button class="chk" aria-pressed="false" aria-label="Mark hydration complete">✓</button><div><b>Hydration</b><span>Water alongside your sachet — the Gulf makes this easy to forget</span></div></div>
-          <div class="dash-item"><button class="chk" aria-pressed="false" aria-label="Mark check-in complete">✓</button><div><b>Check-in</b><span id="dashTip">Tip of the day appears here</span></div></div>
+        <div class="dash-list" aria-hidden="true">
+          <div class="dash-item"><span class="chk" aria-hidden="true">✓</span><div><b>Today's ritual</b><span id="dashRitual">1 sachet · Morning · Strawberry</span></div></div>
+          <div class="dash-item"><span class="chk" aria-hidden="true">✓</span><div><b>Hydration</b><span>Water alongside your sachet — the Gulf makes this easy to forget</span></div></div>
+          <div class="dash-item"><span class="chk" aria-hidden="true">✓</span><div><b>Check-in</b><span id="dashTip">Tip of the day appears here</span></div></div>
         </div>
+        <div class="jr-start mt-m">
+          <h3 style="font-size:1.35rem;margin:0 0 8px">Start yours today</h3>
+          <p class="small" style="color:rgba(246,234,239,.66);margin:0 0 18px">
+            Ninety days, one check-in a day. It runs on this device, needs no account, and nothing is sent anywhere.
+          </p>
+          <button class="btn" id="jrStart" type="button">Begin my 90 days</button>
+          <p class="small" style="margin:14px 0 0;color:rgba(246,234,239,.45)">
+            You can start before your box arrives — day 1 is whenever you say it is.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Journey in progress: the real thing. -->
+    <div class="dash mt-l hide" id="jrLive">
+      <div class="ring-card rv">
+        <span class="eyebrow on-dark" style="margin:0">My Collagen · Day <b id="jrDay">1</b> of 90</span>
+        <svg class="ring" viewBox="0 0 120 120" role="img" aria-labelledby="jrRingLabel">
+          <title id="jrRingLabel">Consistency ring</title>
+          <circle class="bgc" cx="60" cy="60" r="50"/>
+          <circle class="fgc" id="jrRing" cx="60" cy="60" r="50" transform="rotate(-90 60 60)" stroke-dasharray="314" stroke-dashoffset="314"/>
+        </svg>
+        <div class="ring-label" id="jrPct">0%</div>
+        <p class="small" style="margin:0">Consistency</p>
+        <div class="jr-stats">
+          <div><b id="jrStreak">0</b><span>day streak</span></div>
+          <div><b id="jrDone">0</b><span>days complete</span></div>
+          <div><b id="jrLeft">90</b><span>days to go</span></div>
+        </div>
+        <div class="jr-grid" id="jrGrid" role="img" aria-label="Ninety-day completion grid"></div>
+        <p class="small" style="margin:12px 0 0;color:rgba(246,234,239,.45)" id="jrStarted"></p>
+      </div>
+
+      <div class="rv" data-d="1">
+        <p class="jr-today" id="jrToday"></p>
+        <div class="dash-list" id="jrTasks">
+          <div class="dash-item">
+            <button class="chk" type="button" data-task="ritual" aria-pressed="false">✓</button>
+            <div><b>Today's ritual</b><span id="jrRitual">1 sachet · Morning · Strawberry</span></div>
+          </div>
+          <div class="dash-item">
+            <button class="chk" type="button" data-task="hydration" aria-pressed="false">✓</button>
+            <div><b>Hydration</b><span>Water alongside your sachet — the Gulf makes this easy to forget</span></div>
+          </div>
+          <div class="dash-item">
+            <button class="chk" type="button" data-task="checkin" aria-pressed="false">✓</button>
+            <div><b>Check-in</b><span id="jrTip">Tip of the day appears here</span></div>
+          </div>
+        </div>
+
         <div class="cert mt-m" id="certCard" style="opacity:.45">
           <div class="seal">✦</div>
           <span class="eyebrow on-dark" style="margin:0">Day 90</span>
           <h3 id="certTitle">Journey complete</h3>
           <p class="small" style="color:rgba(246,234,239,.6);margin-top:8px" id="certSub">Reach day 90 to unlock your Noorala certificate — an elegant, dated record of a habit you built.</p>
+          <button class="btn gold mt-s hide" id="jrCert" type="button">Download my certificate</button>
+        </div>
+
+        <div class="jr-manage">
+          <button type="button" id="jrShare">Share my progress</button>
+          <button type="button" id="jrReset">Reset my journey</button>
         </div>
       </div>
     </div>
@@ -1234,6 +1298,7 @@
 </script>
 
 <!-- ============================== SCRIPTS ============================== -->
+<script src="assets/js/analytics.js" defer></script>
 <script src="assets/js/noorala.js" defer></script>
 <script src="assets/js/chat.js" defer></script>
 

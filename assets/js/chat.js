@@ -149,13 +149,18 @@ var KB = [
 
 { id:"journey",
   k:["90 day","90-day","ninety","journey","programme","program","dashboard","certificate","qr","streak","tracker","رحلة","برنامج"],
-  a:"Scan the QR on your box and the product becomes digital:<ul>"+
-    "<li>A <b>daily check-in</b> and a consistency score</li>"+
-    "<li>Milestones at <b>day 7, 30, 60 and 90</b></li>"+
-    "<li>An optional private photo journal, stored on your own device</li>"+
-    "<li>A dated <b>certificate</b> at day 90</li></ul>"+
-    "It's included with the 3-box pack.",
-  c:["Add the 90-day pack","Tell me about the profile quiz"], go:"#journey" },
+  a:function(){
+    var J = window.NooralaJourney;
+    if(J && J.active()) return "You're on <b>day " + J.day() + " of 90</b>. Your check-ins are further down this page — " +
+      "tick today's three and the ring updates.<br><br>Everything is saved on this device only, so it survives a refresh but never leaves your phone.";
+    return "It turns the box into a 90-day habit rather than a purchase:<ul>"+
+      "<li>A <b>daily check-in</b> — ritual, hydration, and a moment to notice</li>"+
+      "<li>A <b>real consistency score</b> and a streak, counted from the day you start</li>"+
+      "<li>Milestones at <b>day 7, 30, 60 and 90</b></li>"+
+      "<li>A dated <b>certificate</b> you can download at day 90</li></ul>"+
+      "It runs on your own device, needs no account, and you can start it before your box even arrives.";
+  },
+  c:["Start my 90 days","Add the 90-day pack","Tell me about the profile quiz"], go:"#journey" },
 
 { id:"quiz",
   k:["quiz","profile","personalise","personalize","recommend","which pack","what should i buy","archetype","suggestion","help me choose","اختبار","توصية"],
@@ -217,11 +222,20 @@ var KB = [
 
 { id:"privacy",
   k:["privacy","data","gdpr","store my","tracking","cookie","cookies","personal","خصوصية","بيانات"],
-  a:"Short version: this site doesn't collect anything.<ul>"+
-    "<li>No account, no sign-up, no analytics account tied to you</li>"+
-    "<li>Your bag and this chat are stored <b>on your own device</b> only</li>"+
-    "<li>The skin snapshot runs entirely in your browser — the photo is never uploaded</li>"+
-    "<li>Nothing is sent anywhere until <b>you</b> press send on WhatsApp</li></ul>",
+  a:function(){
+    var A = window.NooralaAnalytics;
+    var on = A && A.active();
+    var lines = "<li>No account and no sign-up — we never ask for your email</li>"+
+      "<li>Your bag, this chat and your 90-day journey are stored <b>on your own device</b> only</li>"+
+      "<li>The skin snapshot runs entirely in your browser — the photo is never uploaded</li>"+
+      "<li>Your order is sent nowhere until <b>you</b> press send on WhatsApp</li>";
+    lines += on
+      ? (A.cookieless()
+          ? "<li>We count visits with a <b>cookieless</b> analytics tool — page views and button clicks, never who you are. Turn on Do Not Track and we skip you entirely.</li>"
+          : "<li>We use an analytics tool that sets cookies to measure visits. Turn on Do Not Track and we skip you entirely.</li>")
+      : "<li>No analytics and no tracking cookies at all</li>";
+    return "Short version: we collect as little as a shop possibly can.<ul>" + lines + "</ul>";
+  },
   c:["Open the skin snapshot","Talk to a person"] },
 
 { id:"about",
@@ -304,6 +318,7 @@ var ACTIONS = {
   "Tell me about the profile quiz":   function(){ return say("quiz"); },
   "Request a partner pack":   function(){ return openSection("#partner-form", "partner"); },
   "Pharmacy partnership":     function(){ return say("partner"); },
+  "Start my 90 days":         function(){ return openSection("#journey", "deep"); },
   "Book a free skin analysis":function(){
     handover("Hi Noorala 🌿 — I'd like to book a free skin analysis. Which branch and date are available?");
     return "Opening WhatsApp so you can pick a branch and a date with the team.";
@@ -345,6 +360,7 @@ function toHuman(){
                  " The desk is closed right now — they'll reply first thing, Sat–Thu 9:00–21:00 Muscat time.");
 }
 function handover(text){
+  if(window.NooralaTrack) window.NooralaTrack("chat_handover");
   var w = window.open(waLink(text), "_blank", "noopener");
   if(!w && window.NooralaCopy) window.NooralaCopy(text, "Pop-up blocked — message copied instead");
 }
@@ -506,6 +522,7 @@ function answer(text){
     return typeof out === "string" ? { html: out, chips: after } : out;
   }
   var hit = match(text);
+  if(window.NooralaTrack) window.NooralaTrack(hit ? "chat_answer" : "chat_no_answer", {topic: hit ? hit.id : text.slice(0,60)});
   if(hit) return render(hit);
 
   return {
@@ -569,6 +586,7 @@ function paint(){
 function open(){
   if(isOpen) return;
   isOpen = true; lastFocus = document.activeElement;
+  if(window.NooralaTrack) window.NooralaTrack("chat_open");
   paint();
   panel.classList.add("open");
   panel.removeAttribute("inert");

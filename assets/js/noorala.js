@@ -117,6 +117,13 @@ function orderRef(){
 }
 window.NooralaCFG = CFG;
 window.NooralaDeskOpen = deskOpen;
+
+/* Analytics is optional and may be switched off entirely, so everything
+   funnels through one helper that is safe to call unconditionally. */
+function track(name, props){
+  try{ if(window.NooralaAnalytics) window.NooralaAnalytics.track(name, props); }catch(e){}
+}
+window.NooralaTrack = track;
 const money = n => CFG.currency + " " + n.toFixed(3);
 const waLink = t => "https://wa.me/" + CFG.wa + "?text=" + encodeURIComponent(t);
 const $  = (s,r=document) => r.querySelector(s);
@@ -139,6 +146,7 @@ const NAV = {
   partner: [["#activation","Activation"],["#value","Value"],["#partner-form","Request pack"],["#contact","Contact"]]
 };
 function setMode(mode, jump){
+  if(document.body.dataset.mode !== mode) track("mode", {mode: mode});
   document.body.dataset.mode = mode;
   $$(".modeswitch button").forEach(b=>b.setAttribute("aria-pressed", String(b.dataset.mode===mode)));
   const links = NAV[mode].map(([h,t])=>`<a href="${h}">${t}</a>`).join("");
@@ -306,6 +314,7 @@ function addToCart(item, opts){
   /* The chat adds items too, and sliding the drawer out over the open chat
      panel would bury the very message confirming the add. */
   if(!opts || !opts.silent){ openCart(true); toast("Added to your bag"); }
+  track("add_to_cart", {pack: CFG.packs[item.pack].label, flavour: item.flavour, source: (opts && opts.silent) ? "chat" : "shop"});
 }
 function renderCart(){
   const body = $("#cartBody");
@@ -362,6 +371,8 @@ $("#cartBody").addEventListener("click",e=>{
   state.cart.splice(+b.dataset.rm,1); renderCart();
 });
 $("#addCart").addEventListener("click",()=>addToCart({pack:state.pack, flavour:state.flavour, qty:state.qty, note:""}));
+$("#cartWa").addEventListener("click", ()=> track("checkout_whatsapp", {items: state.cart.reduce((s,c)=>s+c.qty,0), value: state.cart.reduce((s,c)=>s+CFG.packs[c.pack].price*c.qty,0)}));
+$("#waBuy").addEventListener("click", ()=> track("order_whatsapp_direct", {pack: CFG.packs[state.pack].label, flavour: state.flavour}));
 renderPrices(); renderCart();
 
 /* =====================================================================
@@ -523,6 +534,7 @@ function renderResult(){
     addToCart({pack:"3", flavour:state.flavour, qty:1, note:key==="skin"?"Glow Seeker ritual":"Personal ritual"});
     closeXp();
   });
+  track("quiz_complete", {archetype: a.n.replace(/<[^>]+>/g,""), flavour: flav});
   $("#resWa").href = waLink(`Hi Noorala 🌿\nI completed my Collagen Profile:\n\nProfile: ${a.n.replace(/<[^>]+>/g,"")}\nRitual: 1 sachet · ${moment} · ${flav}\nSkin focus ${s.skin}% · Recovery ${s.rec}% · Hydration ${s.hyd}% · Consistency ${s.con}%\n\nI'd like a recommendation for my first order.`);
   // reflect into the ritual builder + dashboard
   const dr = $("#dashRitual"); if(dr) dr.textContent = `1 sachet · ${moment} · ${flav}`;
@@ -571,6 +583,7 @@ function runScan(){
         rows[idx].querySelector("em").style.width = v + "%";
       }, idx*180);
     });
+    track("skin_snapshot");
     $("#scanAdvice").classList.remove("hide");
     $("#scanAdviceText").textContent = advice(r);
   }, 3300);
@@ -707,7 +720,15 @@ $$("[data-depth]").forEach(b=>b.addEventListener("click",()=>{ press($$("[data-d
 if($("#sciPanel")) paintSci();
 
 /* =====================================================================
-   7 · 90-DAY JOURNEY DASHBOARD
+   7 · THE 90-DAY JOURNEY — a real tracker
+   ---------------------------------------------------------------------
+   This used to be a slider that faked progress. It is now an actual
+   habit tracker: a start date, a check-in per day, a streak, a honest
+   consistency score, and a dated certificate at day 90.
+
+   It keeps its state on the visitor's own device and nowhere else.
+   No account, no server, nothing transmitted — which is the only way to
+   promise a private photo journal and mean it.
    ===================================================================== */
 const TIPS = [
   "Put the box next to the kettle or the coffee machine — visible beats motivated.",
@@ -718,36 +739,233 @@ const TIPS = [
   "Photograph in the same light if you're journalling. Lighting fakes more progress than anything else.",
   "Day 60 is where most people stop noticing effort. That's the point of the whole thing."
 ];
-const slide = $("#daySlide");
-function paintDay(){
-  if(!slide) return;
-  const d = +slide.value;
-  const pct = Math.max(55, Math.min(96, Math.round(58 + d*0.42)));
-  $("#dayNum").textContent = d;
-  $("#ringVal").textContent = pct + "%";
-  const circ = 2*Math.PI*50;
-  $("#ringFg").style.strokeDasharray = circ;
-  $("#ringFg").style.strokeDashoffset = circ*(1-pct/100);
-  $("#dashTip").textContent = TIPS[d % TIPS.length];
-  const marks = [1,7,30,60,90];
-  $$("#timeline .tl").forEach((el,i)=>el.classList.toggle("active", d >= marks[i]));
+const MILESTONES = [1, 7, 30, 60, 90];
+const JR_KEY = "noorala.journey.v1";
+const TASKS = ["ritual", "hydration", "checkin"];
+
+/* ---- date helpers: local calendar days, not UTC, not elapsed hours ---- */
+const dayKey = d => {
+  const p = n => String(n).padStart(2, "0");
+  return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate());
+};
+const midnight = d => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+const daysBetween = (a, b) => Math.round((midnight(b) - midnight(a)) / 86400000);
+
+let journey = null;
+function loadJourney(){
+  try{
+    const raw = JSON.parse(localStorage.getItem(JR_KEY) || "null");
+    if(raw && raw.start && /^\d{4}-\d{2}-\d{2}$/.test(raw.start)){
+      journey = { start: raw.start, days: (raw.days && typeof raw.days === "object") ? raw.days : {} };
+    }
+  }catch(e){ journey = null; }
+}
+function saveJourney(){
+  try{ localStorage.setItem(JR_KEY, JSON.stringify(journey)); }catch(e){}
+}
+
+/* Day number is 1-based and clamped: the tracker never reads past day 90,
+   and a clock set backwards cannot push it below day 1. */
+function currentDay(){
+  if(!journey) return 0;
+  const start = new Date(journey.start + "T00:00:00");
+  return Math.min(90, Math.max(1, daysBetween(start, new Date()) + 1));
+}
+function dateForDay(n){
+  const d = new Date(journey.start + "T00:00:00");
+  d.setDate(d.getDate() + (n - 1));
+  return d;
+}
+/* A day counts as complete when all three check-ins are ticked. */
+function dayComplete(key){
+  const e = journey.days[key];
+  return !!e && TASKS.every(t => e[t]);
+}
+function completedCount(){
+  let n = 0;
+  for(let i = 1; i <= currentDay(); i++) if(dayComplete(dayKey(dateForDay(i)))) n++;
+  return n;
+}
+/* The streak counts back from today, but today not being ticked yet does
+   not break it — otherwise every morning would read as a failure. */
+function streak(){
+  const today = currentDay();
+  let n = 0;
+  for(let i = today; i >= 1; i--){
+    if(dayComplete(dayKey(dateForDay(i)))) n++;
+    else if(i !== today) break;
+    else continue;
+  }
+  return n;
+}
+
+/* ---- rendering ---- */
+const jrPreview = $("#jrPreview"), jrLive = $("#jrLive");
+
+function ring(el, label, pct){
+  const circ = 2 * Math.PI * 50;
+  el.style.strokeDasharray = circ;
+  el.style.strokeDashoffset = circ * (1 - pct / 100);
+  label.textContent = pct + "%";
+}
+
+function paintJourney(){
+  const live = !!journey;
+  jrPreview.classList.toggle("hide", live);
+  jrLive.classList.toggle("hide", !live);
+  if(!live) return;
+
+  const day = currentDay();
+  const done = completedCount();
+  const pct = day ? Math.round(done / day * 100) : 0;
+  const key = dayKey(new Date());
+  const entry = journey.days[key] || {};
+
+  $("#jrDay").textContent = day;
+  $("#jrDone").textContent = done;
+  $("#jrLeft").textContent = Math.max(0, 90 - day);
+  $("#jrStreak").textContent = streak();
+  ring($("#jrRing"), $("#jrPct"), pct);
+
+  const started = new Date(journey.start + "T00:00:00");
+  $("#jrStarted").textContent = "Started " + started.toLocaleDateString(undefined, {day:"numeric", month:"long", year:"numeric"});
+  $("#jrToday").textContent = day >= 90 ? "Day 90 — the last one." : "Today is day " + day + ".";
+  $("#jrTip").textContent = TIPS[(day - 1) % TIPS.length];
+
+  TASKS.forEach(t => {
+    const b = $('#jrTasks [data-task="' + t + '"]');
+    b.setAttribute("aria-pressed", String(!!entry[t]));
+  });
+
+  /* the 90-cell grid: one square per day, so a month of effort is visible at a glance */
+  const grid = $("#jrGrid");
+  if(grid.childElementCount !== 90){
+    grid.innerHTML = Array.from({length:90}, (_, i) => '<i data-d="' + (i+1) + '"></i>').join("");
+  }
+  Array.from(grid.children).forEach((cell, i) => {
+    const n = i + 1;
+    cell.className = n > day ? "" : (dayComplete(dayKey(dateForDay(n))) ? "on" : "off");
+    if(n === day) cell.classList.add("now");
+  });
+
+  $$("#timeline .tl").forEach((el, i) => el.classList.toggle("active", day >= MILESTONES[i]));
+
+  const finished = day >= 90 && dayComplete(dayKey(dateForDay(90)));
   const cert = $("#certCard");
-  if(d >= 90){
-    cert.style.opacity = 1;
+  cert.style.opacity = finished ? 1 : .45;
+  $("#jrCert").classList.toggle("hide", !finished);
+  if(finished){
     $("#certTitle").textContent = "Journey complete";
-    $("#certSub").textContent = "Ninety days, one daily ritual, a habit you built. Your dated Noorala certificate is issued here — elegant, personal, and yours to keep.";
+    $("#certSub").textContent = "Ninety days, " + done + " of them complete. Your dated certificate is ready.";
   } else {
-    cert.style.opacity = .45;
-    $("#certTitle").textContent = (90-d) + " days to go";
+    $("#certTitle").textContent = (90 - day) + " days to go";
     $("#certSub").textContent = "Reach day 90 to unlock your Noorala certificate — an elegant, dated record of a habit you built.";
   }
 }
-if(slide){ slide.addEventListener("input", paintDay); paintDay(); }
-$$(".dash-item .chk").forEach(b=>b.addEventListener("click",()=>{
-  const on = b.getAttribute("aria-pressed")==="true";
-  b.setAttribute("aria-pressed", String(!on));
-  if(!on) toast("Checked in — that's how 90 days get built");
-}));
+
+/* ---- the preview slider (shown only before someone starts) ---- */
+const slide = $("#daySlide");
+function paintPreview(){
+  if(!slide) return;
+  const d = +slide.value;
+  const pct = Math.max(55, Math.min(96, Math.round(58 + d * 0.42)));
+  $("#dayNum").textContent = d;
+  ring($("#ringFgPrev"), $("#ringValPrev"), pct);
+  $("#dashTip").textContent = TIPS[d % TIPS.length];
+  if(!journey) $$("#timeline .tl").forEach((el, i) => el.classList.toggle("active", d >= MILESTONES[i]));
+}
+if(slide){ slide.addEventListener("input", paintPreview); paintPreview(); }
+
+/* ---- actions ---- */
+if($("#jrStart")) $("#jrStart").addEventListener("click", () => {
+  journey = { start: dayKey(new Date()), days: {} };
+  saveJourney();
+  paintJourney();
+  toast("Day 1 begins today — see you tomorrow");
+  track("journey_start");
+  requestAnimationFrame(() => $("#jrToday").scrollIntoView({behavior:"smooth", block:"center"}));
+});
+
+if($("#jrTasks")) $("#jrTasks").addEventListener("click", e => {
+  const b = e.target.closest("[data-task]");
+  if(!b || !journey) return;
+  const key = dayKey(new Date());
+  const entry = journey.days[key] || (journey.days[key] = {});
+  const wasComplete = dayComplete(key);
+  entry[b.dataset.task] = !entry[b.dataset.task];
+  saveJourney();
+  paintJourney();
+  if(!wasComplete && dayComplete(key)){
+    const s = streak();
+    toast(s > 1 ? "Day " + currentDay() + " complete · " + s + "-day streak" : "Day " + currentDay() + " complete");
+    track("journey_day_complete", { day: currentDay(), streak: s });
+  }
+});
+
+if($("#jrReset")) $("#jrReset").addEventListener("click", () => {
+  if(!confirm("Reset your journey? Your start date and every check-in will be deleted from this device. This cannot be undone.")) return;
+  journey = null;
+  try{ localStorage.removeItem(JR_KEY); }catch(e){}
+  paintJourney();
+  toast("Journey reset");
+});
+
+if($("#jrShare")) $("#jrShare").addEventListener("click", () => {
+  const day = currentDay(), done = completedCount();
+  const msg = "My Noorala 90-day journey 🌿\n\nDay " + day + " of 90\n" + done + " days complete · " +
+              Math.round(done / day * 100) + "% consistency · " + streak() + "-day streak";
+  if(navigator.share){ navigator.share({ text: msg }).catch(()=>{}); return; }
+  copyText(msg, "Progress copied — paste it anywhere");
+});
+
+/* The certificate is drawn locally and handed over as a PNG. Nothing is
+   uploaded, so it works offline and needs no service to stay alive. */
+if($("#jrCert")) $("#jrCert").addEventListener("click", () => {
+  const W = 1600, H = 1100, c = document.createElement("canvas");
+  c.width = W; c.height = H;
+  const x = c.getContext("2d");
+  x.fillStyle = "#1A0E14"; x.fillRect(0, 0, W, H);
+  const g = x.createRadialGradient(W*.5, H*.32, 40, W*.5, H*.32, W*.7);
+  g.addColorStop(0, "rgba(200,68,107,.30)"); g.addColorStop(1, "rgba(200,68,107,0)");
+  x.fillStyle = g; x.fillRect(0, 0, W, H);
+  x.strokeStyle = "#C9A46A"; x.lineWidth = 2;
+  x.strokeRect(60, 60, W - 120, H - 120);
+  x.textAlign = "center";
+  x.fillStyle = "#F0BFCD"; x.font = "500 92px Georgia, serif";
+  x.fillText("Noorala", W/2, 260);
+  x.fillStyle = "rgba(246,234,239,.55)"; x.font = "500 26px system-ui, sans-serif";
+  x.fillText("Y O U R   B E A U T Y   S T A R T S   F R O M   W I T H I N", W/2, 315);
+  x.strokeStyle = "#C9A46A"; x.beginPath(); x.moveTo(W/2 - 130, 380); x.lineTo(W/2 + 130, 380); x.stroke();
+  x.fillStyle = "#fff"; x.font = "italic 500 86px Georgia, serif";
+  x.fillText("Ninety days.", W/2, 500);
+  x.fillStyle = "rgba(246,234,239,.78)"; x.font = "400 34px system-ui, sans-serif";
+  x.fillText("A habit built, one sachet at a time.", W/2, 570);
+  const done = completedCount();
+  x.fillStyle = "#C9A46A"; x.font = "500 120px Georgia, serif";
+  x.fillText(done + " / 90", W/2, 740);
+  x.fillStyle = "rgba(246,234,239,.55)"; x.font = "400 28px system-ui, sans-serif";
+  x.fillText("days completed", W/2, 790);
+  const from = new Date(journey.start + "T00:00:00"), to = dateForDay(90);
+  const fmt = d => d.toLocaleDateString(undefined, {day:"numeric", month:"long", year:"numeric"});
+  x.fillStyle = "rgba(246,234,239,.7)"; x.font = "400 30px system-ui, sans-serif";
+  x.fillText(fmt(from) + "  —  " + fmt(to), W/2, 930);
+  x.fillStyle = "rgba(246,234,239,.35)"; x.font = "400 22px system-ui, sans-serif";
+  x.fillText("Muscat, Sultanate of Oman", W/2, 985);
+  c.toBlob(blob => {
+    const url = URL.createObjectURL(blob), a = document.createElement("a");
+    a.href = url; a.download = "noorala-90-day-certificate.png";
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    toast("Certificate saved");
+    track("journey_certificate");
+  }, "image/png");
+});
+
+loadJourney();
+paintJourney();
+/* A journey rolls over at local midnight; repaint so an open tab keeps up. */
+setInterval(() => { if(journey) paintJourney(); }, 60000);
+window.NooralaJourney = { active: () => !!journey, day: currentDay };
 
 /* =====================================================================
    8 · PARTNER ENQUIRY  ·  WHATSAPP DOCK
@@ -788,6 +1006,7 @@ if($("#pfSend")){
   $("#pfSend").addEventListener("click",()=>{
     if(!pfValidate()) return;
     window.open(waLink(partnerMsg()), "_blank", "noopener");
+    track("partner_enquiry", {channel: "whatsapp", type: ($("#pfType")||{}).value || ""});
     toast("Opening WhatsApp with your enquiry");
   });
   $("#pfMail").addEventListener("click", e=>{

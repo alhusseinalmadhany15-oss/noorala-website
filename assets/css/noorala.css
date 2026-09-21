@@ -1041,3 +1041,46 @@ html{overflow-x:hidden}
   .cart{width:min(430px,100vw)}
   .wa-menu{max-width:calc(100vw - 32px)}
 }
+
+/* ===== 10 · THE 90-DAY TRACKER ===== */
+/* The dashboard is a real tracker now, so it needs the parts a real one
+   has: a start state, a streak, and 90 days visible at once. */
+
+.jr-start{border:1px solid var(--line-dark);border-radius:var(--r-m);padding:26px 24px;
+  background:linear-gradient(160deg,rgba(200,68,107,.14),rgba(201,164,106,.06))}
+.jr-start h3{color:#fff}
+
+.jr-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;margin-top:22px;
+  background:var(--line-dark);border:1px solid var(--line-dark);border-radius:var(--r-s);overflow:hidden}
+.jr-stats div{background:rgba(255,255,255,.04);padding:12px 6px;text-align:center}
+.jr-stats b{display:block;font-family:var(--font-d);font-size:1.5rem;color:var(--gold-soft);line-height:1.1}
+.jr-stats span{font-size:.6rem;letter-spacing:.14em;text-transform:uppercase;color:rgba(246,234,239,.5)}
+
+/* Ninety cells — a month of effort readable at a glance, like a contribution grid. */
+.jr-grid{display:grid;grid-template-columns:repeat(18,1fr);gap:3px;margin-top:20px}
+.jr-grid i{aspect-ratio:1;border-radius:2px;background:rgba(255,255,255,.07);
+  transition:background .3s var(--ease),transform .3s var(--ease)}
+.jr-grid i.on{background:linear-gradient(140deg,var(--rose),var(--gold))}
+.jr-grid i.off{background:rgba(255,255,255,.14)}
+.jr-grid i.now{outline:1.5px solid var(--gold-soft);outline-offset:1px;transform:scale(1.18)}
+
+.jr-today{font-family:var(--font-d);font-size:1.45rem;color:#fff;margin:0 0 16px}
+
+/* The preview's ticks are decorative — they must not look pressable. */
+#jrPreview .dash-item .chk{opacity:.4;cursor:default}
+#jrLive .dash-item .chk{color:rgba(246,234,239,.35)}
+#jrLive .dash-item .chk[aria-pressed="true"]{background:var(--rose);border-color:var(--rose);color:#fff}
+#jrLive .dash-item{cursor:default}
+
+.jr-manage{display:flex;gap:10px;flex-wrap:wrap;margin-top:22px}
+.jr-manage button{flex:1;min-width:150px;min-height:44px;border:1px solid var(--line-dark);
+  background:transparent;color:rgba(246,234,239,.66);border-radius:var(--r-s);cursor:pointer;
+  font-family:var(--font-b);font-size:.68rem;letter-spacing:.16em;text-transform:uppercase;
+  transition:.22s var(--ease)}
+.jr-manage button:hover{border-color:var(--rose-soft);color:#fff}
+#jrReset:hover{border-color:var(--rose);color:var(--rose-soft)}
+
+@media(max-width:520px){
+  .jr-grid{grid-template-columns:repeat(15,1fr)}
+  .jr-stats b{font-size:1.3rem}
+}
