@@ -1,0 +1,6 @@
+# Nothing here belongs on a CDN.
+tests/
+.github/
+node_modules/
+README.md
+DEPLOY.md

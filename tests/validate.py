@@ -74,8 +74,29 @@ if m:
         check("JSON-LD parses", False, str(e))
 
 print("\nsite files")
-for f in ("robots.txt", "sitemap.xml", "site.webmanifest", "CNAME", "favicon.ico"):
+for f in ("robots.txt", "sitemap.xml", "site.webmanifest", "favicon.ico", "vercel.json"):
     check("%s exists" % f, os.path.exists(os.path.join(ROOT, f)))
+try:
+    json.load(open(os.path.join(ROOT, "vercel.json"), encoding="utf-8"))
+    check("vercel.json parses", True)
+except Exception as e:
+    check("vercel.json parses", False, str(e))
+
+# The whole point of being on Vercel is headers Pages cannot send. If the CSP
+# ever goes missing, the site quietly loses that protection with no other sign.
+cfg = json.load(open(os.path.join(ROOT, "vercel.json"), encoding="utf-8"))
+sent = {h["key"] for group in cfg.get("headers", []) for h in group["headers"]}
+for h in ("Content-Security-Policy", "Strict-Transport-Security",
+          "X-Content-Type-Options", "Referrer-Policy", "Permissions-Policy"):
+    check("%s is set" % h, h in sent)
+
+# An inline script or event handler would be blocked by our own CSP, so the
+# page must not grow one without the policy changing to match.
+html = open(os.path.join(ROOT, "index.html"), encoding="utf-8").read()
+inline_script = re.findall(r"<script(?![^>]*\bsrc=)(?![^>]*application/ld\+json)[^>]*>", html)
+check("no inline <script> blocks", not inline_script, str(inline_script[:2]))
+handlers = re.findall(r'\son(?:load|click|error|change|submit)\s*=', html)
+check("no inline event handlers", not handlers, str(handlers[:3]))
 try:
     json.load(open(os.path.join(ROOT, "site.webmanifest"), encoding="utf-8"))
     check("web manifest parses", True)
