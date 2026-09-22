@@ -1,8 +1,8 @@
 # Noorala — www.nooralacare.com
 
 Static marketing and ordering site for Noorala Collagen. No build step, no
-framework, no backend — plain HTML, CSS and JavaScript, deployed straight from
-this repository to GitHub Pages.
+framework, no backend — plain HTML, CSS and JavaScript. Vercel watches `main`
+and publishes every push.
 
 ```
 index.html                  the whole site (three modes in one page)
@@ -11,7 +11,8 @@ DEPLOY.md                   domain, DNS, and what to set before launch
 robots.txt  sitemap.xml     crawler files
 site.webmanifest            installable-app metadata
 favicon.ico
-CNAME                       www.nooralacare.com
+vercel.json                 headers (CSP, caching), redirects
+.vercelignore               keeps tests and docs off the CDN
 assets/css/noorala.css      design system, layout, motion, chat, tracker
 assets/js/noorala.js        shop, cart, quiz, skin snapshot, 90-day tracker
 assets/js/chat.js           "Noor", the on-site concierge
@@ -128,8 +129,13 @@ npm install playwright          # once
 node tests/smoke.mjs            # drives a real browser
 ```
 
-Both run in CI on every push and pull request. `DEPLOY.md` covers the domain,
-DNS and what still needs your input before launch.
+Both run in CI on every push and pull request, and every pull request also gets
+its own Vercel preview URL. `DEPLOY.md` covers the host, the domain, DNS, the
+Content-Security-Policy and what still needs your input before launch.
+
+The CSP in `vercel.json` sets `script-src 'self'` — no inline scripts, no
+inline event handlers. `tests/validate.py` fails if one reappears, and adding
+a third-party analytics script means adding its host to the policy.
 
 ## Claims and compliance
 

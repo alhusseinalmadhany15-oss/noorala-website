@@ -1,111 +1,172 @@
-# Going live — www.nooralacare.com
+# Going live
 
-The site is static and deploys straight from this repository to GitHub Pages.
-There is no build step: whatever is on `main` is what the public sees, usually
-within a minute of the push.
+The site is static — no build step, no backend. Vercel watches `main` and
+publishes every push.
 
----
-
-## 1 · Repository settings (once)
-
-**Settings → Pages**
-
-| Setting | Value |
-|---|---|
-| Source | Deploy from a branch |
-| Branch | `main` / `(root)` |
-| Custom domain | `www.nooralacare.com` |
-| Enforce HTTPS | **on** |
-
-The `CNAME` file in this repository already holds `www.nooralacare.com`. Keep
-it — deleting it silently drops the custom domain on the next deploy.
-
-> Tick **Enforce HTTPS** only after the certificate has been issued. GitHub
-> provisions it automatically once DNS resolves, which usually takes a few
-> minutes and occasionally up to 24 hours. The checkbox stays greyed out
-> until then; that is normal and not a fault.
+Live preview: <https://noorala-website.vercel.app/>
 
 ---
 
-## 2 · DNS (once, at your registrar)
+## 1 · One host, not two
 
-Set these on the `nooralacare.com` zone. They are the only records the site
-needs — leave any existing `MX` records for email alone.
+This repository was briefly served by **both** GitHub Pages and Vercel. Two
+hosts serving the same content is worth avoiding: search engines see duplicate
+pages, and the two fight over the custom domain's certificate.
 
-**The `www` host — this is the one that serves the site:**
+Vercel is the one to keep, because it can send HTTP headers and Pages cannot —
+see §4. So:
 
-| Type | Host | Value |
+- The `CNAME` file has been removed. It existed only to tell GitHub Pages which
+  custom domain to claim, and while it was present Pages kept claiming
+  `www.nooralacare.com` whatever Vercel was told.
+- **Turn GitHub Pages off**: repository **Settings → Pages → Source → None.**
+  Until you do, the old build stays reachable at
+  `alhusseinalmadhany15-oss.github.io/noorala-website/`.
+
+> To go back to Pages instead: restore the file with
+> `echo www.nooralacare.com > CNAME`, commit, and set Source back to
+> `main` / `(root)`. Everything else in the repository works on either host;
+> only the headers in §4 are Vercel-only.
+
+---
+
+## 2 · Adding the domain
+
+In Vercel: **Project → Settings → Domains → Add**, and enter
+`www.nooralacare.com`. Add `nooralacare.com` too and let Vercel redirect it to
+the `www` host.
+
+**Then read the DNS records off that screen and use those.** Vercel now issues
+project-specific values — a CNAME target like
+`d1d4fc829fe7bc7c.vercel-dns-017.com` rather than one shared hostname. The old
+generic values (`76.76.21.21` for A records, `cname.vercel-dns.com` for CNAME)
+still work, but the dashboard is the authority for your project. Do not copy
+values out of a blog post, including this one.
+
+The shape is:
+
+| Host | Type | Value |
 |---|---|---|
-| CNAME | `www` | `alhusseinalmadhany15-oss.github.io.` |
+| `www` | CNAME | the target Vercel shows you |
+| `@` | A | the address Vercel shows you |
 
-**The bare domain, so `nooralacare.com` redirects to `www`:**
+Leave any existing `MX` records alone, or you will take your email down with
+your website. Never put a CNAME on the bare domain — it breaks mail on most
+registrars.
 
-| Type | Host | Value |
-|---|---|---|
-| A | `@` | `185.199.108.153` |
-| A | `@` | `185.199.109.153` |
-| A | `@` | `185.199.110.153` |
-| A | `@` | `185.199.111.153` |
-| AAAA | `@` | `2606:50c0:8000::153` |
-| AAAA | `@` | `2606:50c0:8001::153` |
-| AAAA | `@` | `2606:50c0:8002::153` |
-| AAAA | `@` | `2606:50c0:8003::153` |
-
-Those are GitHub's published Pages addresses. If GitHub ever changes them the
-current list is at
-<https://docs.github.com/pages/configuring-a-custom-domain-for-your-github-pages-site>.
-
-**Do not** point `@` at a CNAME. A CNAME on the zone apex breaks email on most
-registrars, and some reject it outright.
+HTTPS is automatic once DNS resolves, usually within minutes.
 
 ### Checking it worked
 
 ```sh
-dig +short www.nooralacare.com          # → alhusseinalmadhany15-oss.github.io + an IP
-dig +short nooralacare.com              # → the four 185.199.x.153 addresses
-curl -sSI https://www.nooralacare.com | head -1     # → HTTP/2 200
-curl -sSI https://nooralacare.com | head -2         # → 301 to the www host
+dig +short www.nooralacare.com
+curl -sSI https://www.nooralacare.com | head -1        # → HTTP/2 200
+curl -sSI https://nooralacare.com | head -2            # → 308 to the www host
+curl -sSI https://www.nooralacare.com | grep -i content-security   # → the CSP from §4
 ```
-
-DNS changes propagate in minutes to a few hours depending on the registrar's
-TTL. Until then the old site — or a registrar parking page — may still appear.
 
 ---
 
-## 3 · Why `.nojekyll` is there
+## 3 · Other domains
 
-GitHub Pages runs every site through Jekyll by default. This one needs no
-build step, and Jekyll's template language treats `{{ … }}` and `{% … %}` as
-its own — so the first time one of those appears in the source, Jekyll eats it
-silently and serves mangled output with no error anywhere.
+Domains are additive. You can point several at the same project and let Vercel
+redirect all but one to the primary, so choosing a new address later costs
+nothing you have already built.
 
-The most likely place for that to happen is Noor's knowledge base in
-`assets/js/chat.js`, where an answer could easily contain braces. The empty
-`.nojekyll` file at the repository root switches Jekyll off entirely, which
-also makes deploys faster. Leave it in place.
+**`noorala.care.om` is not registrable.** `.om` has a fixed set of second
+levels — `co`, `com`, `org`, `net`, `edu`, `gov`, `museum`, `pro`, `med`,
+`biz`, `mil` — and `care` is not among them. What you can register as an Omani
+business is `noorala.om`, `noorala.com.om` or `noorala.co.om`, through Omantel,
+Ooredoo or Gulf Cybertech, with a scanned copy of your commercial
+registration. Since December 2025 no trademark certificate is needed.
 
-## 4 · Deploying a change
+**`noorala.care` is registrable** — `.care` is an ordinary generic TLD, open to
+anyone, instant, roughly USD 55 a year.
+
+A note on positioning rather than plumbing: the site's own copy sells across
+the Gulf — the Gulf section names Muscat, Dubai, Doha and Riyadh, and the
+partner section offers GCC distribution and export. A national `.om` address
+reads as *Oman only* to a buyer in Dubai. Worth weighing before making one the
+primary.
+
+**If you change the primary domain**, these follow it:
+
+- `index.html` — `<link rel="canonical">`, `og:url`, `og:image`,
+  `twitter:image`, and every `https://www.nooralacare.com` inside the JSON-LD
+- `sitemap.xml` — `<loc>` and both `<image:loc>`
+- `robots.txt` — the `Sitemap:` line
+- `analytics.js` — `site` if the provider keys on the domain
+
+---
+
+## 4 · The headers, and why they are the reason to be on Vercel
+
+`vercel.json` sends a Content-Security-Policy and the usual protective
+headers. GitHub Pages cannot send any header at all, which is the one
+capability that actually justified moving.
+
+The policy is deliberately strict on scripts:
+
+```
+script-src 'self'
+```
+
+No inline scripts, no inline event handlers. The page was changed to suit it —
+the font stylesheet no longer uses an `onload` attribute, and the intro curtain
+is driven by a CSS class instead of an inline snippet. `tests/validate.py`
+fails the build if an inline `<script>` or an `onload=` attribute reappears, so
+this cannot regress quietly.
+
+`style-src` does allow `'unsafe-inline'`, because the markup uses `style="…"`
+attributes throughout. Inline styles are a far smaller risk than inline
+scripts.
+
+> **Turning analytics on requires a CSP change.** The policy currently allows
+> scripts and connections from this origin only, so a third-party analytics
+> script will be silently blocked. When you set a provider in
+> `assets/js/analytics.js`, add its host to both `script-src` and
+> `connect-src` in `vercel.json`. For Plausible that is
+> `https://plausible.io`. Check the browser console for a CSP violation if
+> events never arrive.
+
+### Caching
+
+Asset filenames carry no content hash — it is `noorala.css`, not
+`noorala.8fa21c.css`. A long `immutable` cache would therefore strand visitors
+on an old stylesheet after a deploy, so the headers are deliberately modest:
+
+| Path | Cache | Why |
+|---|---|---|
+| `*.html` | revalidate every time | content changes without warning |
+| `/assets/css`, `/assets/js` | 5 min, then revalidate in the background | a deploy reaches everyone within 5 minutes |
+| `/assets/img` | 30 days | product photography is stable |
+
+If you ever want year-long caching, add content hashes to the filenames first.
+
+---
+
+## 5 · Deploying a change
 
 ```sh
 git checkout main
 git pull
 # …edit…
-python3 tests/validate.py        # structure, links, assets, structured data
+python3 tests/validate.py        # structure, links, assets, headers, CSP hygiene
 node tests/smoke.mjs             # drives a real browser (needs: npm i playwright)
 git commit -am "what changed"
 git push
 ```
 
-Both checks also run in GitHub Actions on every push and pull request
-(`.github/workflows/checks.yml`), so a regression is caught even if you skip
-them locally.
+Vercel builds every push to `main`, and every pull request gets its own
+preview URL. GitHub Actions runs both check suites on each push and pull
+request (`.github/workflows/checks.yml`).
 
 ---
 
-## 5 · What to set before, or soon after, launch
+## 6 · What still needs your input
 
 ### Prices — live now, unverified
-`CFG.packs` at the top of `assets/js/noorala.js` currently holds:
+`CFG.packs` at the top of `assets/js/noorala.js` holds:
 
 ```js
 1: { price: 24.900 }   2: { price: 44.900 }   3: { price: 64.900 }
@@ -113,12 +174,11 @@ them locally.
 
 These were placeholders carried over from the original build and are now
 public. Customers ordering through WhatsApp will quote them back to you.
-Change them in that one place — the shop, the cart, the chat and the
-`Product` structured data all read from it.
+Change them in that one place — the shop, the cart, the chat and the `Product`
+structured data all read from it.
 
 ### Analytics — wired up, switched off
-`assets/js/analytics.js` does nothing until you set a provider. Open it and
-change two lines:
+`assets/js/analytics.js` does nothing until you set a provider:
 
 ```js
 provider: "plausible",
@@ -126,42 +186,42 @@ site:     "nooralacare.com",
 ```
 
 Plausible, Umami and GoatCounter are cookieless and need no consent banner.
-GA4 is supported but sets cookies, which in most jurisdictions requires a
-banner this site does not have — pick it only if you will add one.
+GA4 sets cookies, which in most jurisdictions requires one this site does not
+have. Remember the CSP change in §4.
 
 The privacy answer in the chat reads this config and rewords itself, so the
 site never claims more privacy than it is actually giving.
 
-Events already wired: `mode`, `add_to_cart`, `checkout_whatsapp`,
+Events wired: `mode`, `add_to_cart`, `checkout_whatsapp`,
 `order_whatsapp_direct`, `quiz_complete`, `skin_snapshot`, `partner_enquiry`,
 `chat_open`, `chat_answer`, `chat_no_answer`, `chat_handover`,
 `journey_start`, `journey_day_complete`, `journey_certificate`.
 
-`chat_no_answer` is the useful one: it records questions the concierge could
-not answer, which tells you exactly what to add to its knowledge base.
+`chat_no_answer` is the useful one: it records the questions the concierge
+could not answer, which is exactly the list of what to add to its knowledge
+base.
 
 ### Email address
-The site lists `hello@noorala.com`, but the domain is `nooralacare.com`. If
-that mailbox does not exist, partner enquiries sent by email are going
-nowhere. Either create it or change `CFG.email` in `assets/js/noorala.js`
-and the four `mailto:` links in `index.html`.
+The site lists `hello@noorala.com` but the domain is `nooralacare.com`. If that
+mailbox does not exist, every emailed partner enquiry is going nowhere. Either
+create it, or change `CFG.email` in `assets/js/noorala.js` and the four
+`mailto:` links in `index.html`.
 
 ### The collagen figure
-The pack reads **15000 mg collagen per box** and the site now matches it.
-Worth confirming with the manufacturer — if the pack artwork is wrong, that
-is a packaging problem, and six places on the site change back together
-(hero chips, fact bar, ingredients rail, spec table, science panel, chat).
+The pack reads **15000 mg collagen per box** and the site now matches it. Worth
+confirming with the manufacturer — if the pack artwork is wrong, that is a
+packaging problem, and six places on the site change back together (hero chips,
+fact bar, ingredients rail, spec table, science panel, chat).
 
 ---
 
-## 6 · Rolling back
+## 7 · Rolling back
 
-Every deploy is a commit, so a bad one reverts in seconds:
+Every deploy is a commit. In the Vercel dashboard, **Deployments → the last
+good one → Promote to Production** puts it back immediately. Or revert in git
+and push:
 
 ```sh
 git revert <sha>
 git push
 ```
-
-Pages redeploys from the new head. There is no cache to purge, though a
-visitor's browser may hold the old CSS or JS for a few minutes.

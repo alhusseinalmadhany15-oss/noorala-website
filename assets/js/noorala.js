@@ -1105,7 +1105,7 @@ if(RM || introSeen || !introEl){
   endIntro();
 } else {
   try{ sessionStorage.setItem("noorala.intro","1"); }catch(e){}
-  document.body.classList.add("intro-lock");
+  document.body.classList.add("intro-lock", "intro-playing");
   addEventListener("load", ()=>setTimeout(endIntro, 950));
   setTimeout(endIntro, 2600);                       // failsafe: slow network
   addEventListener("keydown", e=>{ if(e.key==="Escape") endIntro(); }, {once:true});

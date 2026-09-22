@@ -568,13 +568,16 @@ body[data-mode="partner"] .m-nop{display:none}
 
 /* ===== 4 · MOTION LAYER ===== */
 /* ---------- intro curtain ---------- */
-#intro{position:fixed;inset:0;z-index:200;background:var(--noir);display:grid;place-items:center;text-align:center;
+#intro{position:fixed;inset:0;z-index:200;background:var(--noir);display:none;place-items:center;text-align:center;
   transition:opacity .7s var(--ease),visibility .7s;padding:20px}
 #intro::before{content:'';position:absolute;inset:0;background:radial-gradient(50vw 50vw at 50% 50%,rgba(200,68,107,.28),transparent 65%);animation:introGlow 2.4s var(--ease) infinite alternate}
 @keyframes introGlow{from{opacity:.5;transform:scale(.9)}to{opacity:1;transform:scale(1.1)}}
 #intro .in-logo{position:relative;font-family:var(--font-d);color:#fff;font-size:clamp(2.6rem,9vw,5rem);opacity:0;
   animation:introLogo 1.15s var(--ease) forwards}
-#intro .in-logo .leaf{color:var(--gold)}
+/* The wordmark leaf is a colour emoji, so `color` never applies to it and
+   at the curtain's 5rem it rendered as a large green glyph splitting the
+   name in half. Scale and lift it the way the header mark does. */
+#intro .in-logo .leaf{display:inline-block;transform:translate(-3px,-26px) rotate(6deg) scale(.3);color:var(--gold)}
 #intro .in-line{position:relative;height:1px;width:0;margin:20px auto 14px;background:linear-gradient(90deg,transparent,var(--gold),transparent);animation:introLine 1.3s var(--ease) .3s forwards}
 #intro .in-tag{position:relative;font-size:.66rem;letter-spacing:.42em;text-transform:uppercase;color:rgba(246,234,239,.6);opacity:0;animation:introTag .9s var(--ease) .55s forwards}
 @keyframes introLogo{from{opacity:0;transform:translateY(22px) scale(.97);filter:blur(10px)}to{opacity:1;transform:none;filter:none}}
@@ -934,7 +937,11 @@ body.no-scroll{overflow:hidden}
 .wa-status.is-open{color:#2E7D4F}
 
 /* The intro curtain must never strand a visitor whose JS failed. */
-.no-js #intro,#intro[hidden]{display:none}
+/* The curtain stays hidden until the script decides to play it. Nothing
+   inline is needed to reveal it, and a visitor without JavaScript never
+   sees a full-screen overlay that nothing will ever dismiss. */
+body.intro-playing #intro{display:grid}
+#intro[hidden]{display:none !important}
 
 /* Respect the OS setting site-wide, not just per-component. */
 @media (prefers-reduced-motion: reduce){
